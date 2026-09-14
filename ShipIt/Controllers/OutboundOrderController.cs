@@ -60,8 +60,6 @@ namespace ShipIt.Controllers
                     productIds.Add(product.Id);
                 }
             }
-            var trucksRequired = (int)Math.Ceiling(TotalWeightKg / 2000);
-
             if (errors.Count > 0)
             {
                 throw new NoSuchEntityException(string.Join("; ", errors));
@@ -97,9 +95,69 @@ namespace ShipIt.Controllers
                 throw new InsufficientStockException(string.Join("; ", errors));
             }
 
+            var trucks = CreateTrucks(request.OrderLines, products);
             _stockRepository.RemoveStock(request.WarehouseId, lineItems);
 
-            return new OutBoundResponse(TotalWeightKg, trucksRequired);
+            var response = new OutBoundResponse()
+            {
+                TotalWeightKg = TotalWeightKg,
+                TrucksRequired = trucks.Count,
+                Trucks = trucks
+            };
+
+            return response;
+        }
+
+        private List<OutboundTruck> CreateTrucks(
+            IEnumerable<OrderLine> orderLines,
+            Dictionary<string, Product> products)
+        {
+            var trucks = new List<OutboundTruck>();
+            var sortedOrderLines = orderLines
+                .OrderByDescending(orderLine =>
+                    products[orderLine.gtin].Weight * orderLine.quantity)
+                .ToList();
+
+            foreach (var orderLine in sortedOrderLines)
+            {
+                var product = products[orderLine.gtin];
+                var unitWeightKg = product.Weight / 1000;
+                var remainingQuantity = orderLine.quantity;
+
+                if (unitWeightKg > 2000)
+                {
+                    throw new ValidationException(
+                        string.Format("Product {0} weighs more than the truck capacity", orderLine.gtin));
+                }
+
+                while (remainingQuantity > 0)
+                {
+                    var truck = trucks
+                        .Where(t => 2000 - t.TotalWeightKg >= unitWeightKg)
+                        .OrderByDescending(t => t.TotalWeightKg)
+                        .FirstOrDefault();
+
+                    if (truck == null)
+                    {
+                        truck = new OutboundTruck();
+                        trucks.Add(truck);
+                    }
+
+                    var availableCapacity = 2000 - truck.TotalWeightKg;
+                    var quantityThatFits = (int)Math.Floor(availableCapacity / unitWeightKg);
+                    var quantityToAdd = Math.Min(remainingQuantity, quantityThatFits);
+
+                    truck.OrderLines.Add(new OrderLine
+                    {
+                        gtin = orderLine.gtin,
+                        quantity = quantityToAdd
+                    });
+                    truck.TotalWeightKg += quantityToAdd * unitWeightKg;
+                    remainingQuantity -= quantityToAdd;
+                }
+            }
+
+            return trucks;
         }
     }
 }

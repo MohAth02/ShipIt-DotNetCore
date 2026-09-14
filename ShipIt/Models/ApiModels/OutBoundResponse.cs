@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace ShipIt.Models.ApiModels
 {
     public class OutBoundResponse : Response
@@ -5,13 +7,14 @@ namespace ShipIt.Models.ApiModels
         public double TotalWeightKg { get; set; }
 
         public int TrucksRequired { get; set; }
-        public OutBoundResponse(double totalWeight, int trucksRequired)
+        public List<OutboundTruck> Trucks { get; set; }
+
+        public OutBoundResponse()
         {
-            this.TotalWeightKg = totalWeight;
-            this.TrucksRequired = trucksRequired;
+            this.TotalWeightKg = 0;
+            this.TrucksRequired = 0;
+            this.Trucks = new List<OutboundTruck>();
             Success = true;
         }
-     
-        public OutBoundResponse() { }
     }
 }

@@ -57,10 +57,91 @@ namespace ShipItTest
                 }
             };
 
-            outboundOrderController.Post(outboundOrder);
+            var response = outboundOrderController.Post(outboundOrder);
 
             var stock = stockRepository.GetStockByWarehouseAndProductIds(WAREHOUSE_ID, new List<int>() { productId })[productId];
             Assert.AreEqual(stock.held, 7);
+            Assert.That(response.TotalWeightKg, Is.EqualTo(0.9).Within(0.0001));
+            Assert.AreEqual(1, response.TrucksRequired);
+            Assert.AreEqual(1, response.Trucks.Count);
+            Assert.AreEqual(GTIN, response.Trucks[0].OrderLines[0].gtin);
+            Assert.AreEqual(3, response.Trucks[0].OrderLines[0].quantity);
+        }
+
+        [Test]
+        public void TestOutboundOrderCreatesMultipleTrucksWhenCapacityIsExceeded()
+        {
+            onSetUp();
+            const int quantity = 7000;
+            stockRepository.AddStock(WAREHOUSE_ID, new List<StockAlteration>()
+            {
+                new StockAlteration(productId, quantity)
+            });
+
+            var outboundOrder = new OutboundOrderRequestModel()
+            {
+                WarehouseId = WAREHOUSE_ID,
+                OrderLines = new List<OrderLine>()
+                {
+                    new OrderLine()
+                    {
+                        gtin = GTIN,
+                        quantity = quantity
+                    }
+                }
+            };
+
+            var response = outboundOrderController.Post(outboundOrder);
+            var quantityLoaded = 0;
+
+            foreach (var truck in response.Trucks)
+            {
+                Assert.LessOrEqual(truck.TotalWeightKg, 2000);
+                foreach (var orderLine in truck.OrderLines)
+                {
+                    quantityLoaded += orderLine.quantity;
+                }
+            }
+
+            Assert.AreEqual(2, response.TrucksRequired);
+            Assert.AreEqual(2, response.Trucks.Count);
+            Assert.AreEqual(quantity, quantityLoaded);
+        }
+
+        [Test]
+        public void TestOutboundOrderGroupsProductsOnOneTruck()
+        {
+            onSetUp();
+            const string secondGtin = "0001";
+            var secondProductDataModel = new ProductBuilder()
+                .setGtin(secondGtin)
+                .setWeight(400)
+                .CreateProductDatabaseModel();
+            productRepository.AddProducts(new List<ProductDataModel>() { secondProductDataModel });
+            var secondProduct = new Product(productRepository.GetProductByGtin(secondGtin));
+
+            stockRepository.AddStock(WAREHOUSE_ID, new List<StockAlteration>()
+            {
+                new StockAlteration(productId, 3),
+                new StockAlteration(secondProduct.Id, 2)
+            });
+
+            var outboundOrder = new OutboundOrderRequestModel()
+            {
+                WarehouseId = WAREHOUSE_ID,
+                OrderLines = new List<OrderLine>()
+                {
+                    new OrderLine() { gtin = GTIN, quantity = 3 },
+                    new OrderLine() { gtin = secondGtin, quantity = 2 }
+                }
+            };
+
+            var response = outboundOrderController.Post(outboundOrder);
+
+            Assert.AreEqual(1, response.TrucksRequired);
+            Assert.AreEqual(1, response.Trucks.Count);
+            Assert.AreEqual(2, response.Trucks[0].OrderLines.Count);
+            Assert.That(response.Trucks[0].TotalWeightKg, Is.EqualTo(1.7).Within(0.0001));
         }
 
         [Test]

@@ -15,10 +15,13 @@ namespace ShipIt.Repositories
         int GetCount();
         int GetWarehouseCount();
         EmployeeDataModel GetEmployeeByName(string name);
+        IEnumerable<EmployeeDataModel> GetEmployeesByName(string name);
+        EmployeeDataModel GetEmployeeById(int id);
         IEnumerable<EmployeeDataModel> GetEmployeesByWarehouseId(int warehouseId);
         EmployeeDataModel GetOperationsManager(int warehouseId);
         void AddEmployees(IEnumerable<Employee> employees);
         void RemoveEmployee(string name);
+        void RemoveEmployee(int id);
     }
 
     public class EmployeeRepository : RepositoryBase, IEmployeeRepository
@@ -75,16 +78,35 @@ namespace ShipIt.Repositories
 
         public EmployeeDataModel GetEmployeeByName(string name)
         {
-            string sql = "SELECT name, w_id, role, ext FROM em WHERE name = @name";
+            var employees = GetEmployeesByName(name).ToList();
+            if (employees.Count > 1)
+            {
+                throw new InvalidStateException(string.Format("Multiple employees found with name: {0}", name));
+            }
+
+            return employees.Single();
+        }
+
+        public IEnumerable<EmployeeDataModel> GetEmployeesByName(string name)
+        {
+            string sql = "SELECT employee_id, name, w_id, role, ext FROM em WHERE name = @name";
             var parameter = new NpgsqlParameter("@name", name);
-            string noProductWithIdErrorMessage = string.Format("No employees found with name: {0}", name);
-            return base.RunSingleGetQuery(sql, reader => new EmployeeDataModel(reader),noProductWithIdErrorMessage, parameter);
+            string noEmployeeErrorMessage = string.Format("No employees found with name: {0}", name);
+            return base.RunGetQuery(sql, reader => new EmployeeDataModel(reader), noEmployeeErrorMessage, parameter);
+        }
+
+        public EmployeeDataModel GetEmployeeById(int id)
+        {
+            string sql = "SELECT employee_id, name, w_id, role, ext FROM em WHERE employee_id = @employee_id";
+            var parameter = new NpgsqlParameter("@employee_id", id);
+            string noEmployeeErrorMessage = string.Format("No employee found with id: {0}", id);
+            return base.RunSingleGetQuery(sql, reader => new EmployeeDataModel(reader), noEmployeeErrorMessage, parameter);
         }
 
         public IEnumerable<EmployeeDataModel> GetEmployeesByWarehouseId(int warehouseId)
         {
 
-            string sql = "SELECT name, w_id, role, ext FROM em WHERE w_id = @w_id";
+            string sql = "SELECT employee_id, name, w_id, role, ext FROM em WHERE w_id = @w_id";
             var parameter = new NpgsqlParameter("@w_id", warehouseId);
             string noProductWithIdErrorMessage =
                 string.Format("No employees found with Warehouse Id: {0}", warehouseId);
@@ -94,7 +116,7 @@ namespace ShipIt.Repositories
         public EmployeeDataModel GetOperationsManager(int warehouseId)
         {
 
-            string sql = "SELECT name, w_id, role, ext FROM em WHERE w_id = @w_id AND role = @role";
+            string sql = "SELECT employee_id, name, w_id, role, ext FROM em WHERE w_id = @w_id AND role = @role";
             var parameters = new []
             {
                 new NpgsqlParameter("@w_id", warehouseId),
@@ -122,8 +144,19 @@ namespace ShipIt.Repositories
 
         public void RemoveEmployee(string name)
         {
-            string sql = "DELETE FROM em WHERE name = @name";
-            var parameter = new NpgsqlParameter("@name", name);
+            var employees = GetEmployeesByName(name).ToList();
+            if (employees.Count > 1)
+            {
+                throw new InvalidStateException(string.Format("Multiple employees found with name: {0}", name));
+            }
+
+            RemoveEmployee(employees.Single().Id);
+        }
+
+        public void RemoveEmployee(int id)
+        {
+            string sql = "DELETE FROM em WHERE employee_id = @employee_id";
+            var parameter = new NpgsqlParameter("@employee_id", id);
             var rowsDeleted = RunSingleQueryAndReturnRecordsAffected(sql, parameter);
             if (rowsDeleted == 0)
             {

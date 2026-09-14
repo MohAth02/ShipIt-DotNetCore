@@ -26,7 +26,24 @@ namespace ShipIt.Controllers
         {
             Log.Info($"Looking up employee by name: {name}");
 
-            var employee = new Employee(_employeeRepository.GetEmployeeByName(name));
+            var employees = _employeeRepository.GetEmployeesByName(name).ToList();
+            if (employees.Count > 1)
+            {
+                throw new MalformedRequestException("Employee name is ambiguous: " + name);
+            }
+
+            var employee = new Employee(employees.Single());
+
+            Log.Info("Found employee: " + employee);
+            return new EmployeeResponse(employee);
+        }
+
+        [HttpGet("by-id/{id}")]
+        public EmployeeResponse GetById([FromRoute] int id)
+        {
+            Log.Info(String.Format("Looking up employee by id: {0}", id));
+
+            var employee = new Employee(_employeeRepository.GetEmployeeById(id));
 
             Log.Info("Found employee: " + employee);
             return new EmployeeResponse(employee);
@@ -68,19 +85,38 @@ namespace ShipIt.Controllers
         [HttpDelete("")]
         public void Delete([FromBody] RemoveEmployeeRequest requestModel)
         {
-            string name = requestModel.Name;
-            if (name == null)
+            if (requestModel == null)
             {
-                throw new MalformedRequestException("Unable to parse name from request parameters");
+                throw new MalformedRequestException("Unable to parse employee from request parameters");
             }
 
             try
             {
-                _employeeRepository.RemoveEmployee(name);
+                if (requestModel.Id.HasValue)
+                {
+                    _employeeRepository.RemoveEmployee(requestModel.Id.Value);
+                    return;
+                }
+
+                if (requestModel.Name == null)
+                {
+                    throw new MalformedRequestException("Unable to parse employee id or name from request parameters");
+                }
+
+                var employees = _employeeRepository.GetEmployeesByName(requestModel.Name).ToList();
+                if (employees.Count > 1)
+                {
+                    throw new MalformedRequestException("Employee name is ambiguous: " + requestModel.Name);
+                }
+
+                _employeeRepository.RemoveEmployee(employees.Single().Id);
             }
             catch (NoSuchEntityException)
             {
-                throw new NoSuchEntityException("No employee exists with name: " + name);
+                var identifier = requestModel.Id.HasValue
+                    ? requestModel.Id.Value.ToString()
+                    : requestModel.Name;
+                throw new NoSuchEntityException("No employee exists with identifier: " + identifier);
             }
         }
     }

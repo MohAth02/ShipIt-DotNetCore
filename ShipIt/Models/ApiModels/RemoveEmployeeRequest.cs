@@ -7,6 +7,7 @@ namespace ShipIt.Models.ApiModels
 {
     public class RemoveEmployeeRequest
     {
+        public int? Id { get; set; }
         public string Name { get; set; }
     }
 }

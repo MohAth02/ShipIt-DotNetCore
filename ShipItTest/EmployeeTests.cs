@@ -143,22 +143,52 @@ namespace ShipItTest
         }
 
         [Test]
-        public void TestAddDuplicateEmployee()
+        public void TestAddEmployeesWithDuplicateName()
         {
             onSetUp();
             var employeeBuilder = new EmployeeBuilder().setName(NAME);
             employeeRepository.AddEmployees(new List<Employee>() { employeeBuilder.CreateEmployee() });
             var addEmployeesRequest = employeeBuilder.CreateAddEmployeesRequest();
 
-            try
+            var response = employeeController.Post(addEmployeesRequest);
+            var employees = employeeRepository.GetEmployeesByName(NAME).ToList();
+
+            Assert.IsTrue(response.Success);
+            Assert.AreEqual(2, employees.Count);
+            Assert.AreNotEqual(employees[0].Id, employees[1].Id);
+        }
+
+        [Test]
+        public void TestGetEmployeeByAmbiguousName()
+        {
+            onSetUp();
+            var employeeBuilder = new EmployeeBuilder().setName(NAME);
+            employeeRepository.AddEmployees(new List<Employee>()
             {
-                employeeController.Post(addEmployeesRequest);
-                Assert.Fail("Expected exception to be thrown.");
-            }
-            catch (Exception)
+                employeeBuilder.CreateEmployee(),
+                employeeBuilder.CreateEmployee()
+            });
+
+            Assert.Throws<MalformedRequestException>(() => employeeController.Get(NAME));
+        }
+
+        [Test]
+        public void TestDeleteEmployeeByIdOnlyDeletesThatEmployee()
+        {
+            onSetUp();
+            var employeeBuilder = new EmployeeBuilder().setName(NAME);
+            employeeRepository.AddEmployees(new List<Employee>()
             {
-                Assert.IsTrue(true);
-            }
+                employeeBuilder.CreateEmployee(),
+                employeeBuilder.CreateEmployee()
+            });
+
+            var employees = employeeRepository.GetEmployeesByName(NAME).ToList();
+            employeeController.Delete(new RemoveEmployeeRequest { Id = employees[0].Id });
+
+            var remainingEmployees = employeeRepository.GetEmployeesByName(NAME).ToList();
+            Assert.AreEqual(1, remainingEmployees.Count);
+            Assert.AreEqual(employees[1].Id, remainingEmployees[0].Id);
         }
 
         private bool EmployeesAreEqual(Employee A, Employee B)

@@ -36,40 +36,47 @@ namespace ShipIt.Controllers
 
             Log.Debug(String.Format("Found operations manager: {0}", operationsManager));
 
-            var allStock = _stockRepository.GetStockByWarehouseId(warehouseId);
+            var inboundItems = _stockRepository.GetInboundOrderDataByWarehouseId(warehouseId);
 
-            Dictionary<Company, List<InboundOrderLine>> orderlinesByCompany = new Dictionary<Company, List<InboundOrderLine>>();
-            foreach (var stock in allStock)
+            var orderSegmentsByGcp = new Dictionary<string, OrderSegment>();
+            foreach (var item in inboundItems)
             {
-                Product product = new Product(_productRepository.GetProductById(stock.ProductId));
-                if(stock.held < product.LowerThreshold && !product.Discontinued)
+                if (!orderSegmentsByGcp.ContainsKey(item.Gcp))
                 {
-                    Company company = new Company(_companyRepository.GetCompany(product.Gcp));
-
-                    var orderQuantity = Math.Max(product.LowerThreshold * 3 - stock.held, product.MinimumOrderQuantity);
-
-                    if (!orderlinesByCompany.ContainsKey(company))
+                    orderSegmentsByGcp[item.Gcp] = new OrderSegment
                     {
-                        orderlinesByCompany.Add(company, new List<InboundOrderLine>());
-                    }
-
-                    orderlinesByCompany[company].Add( 
-                        new InboundOrderLine()
+                        Company = new Company
                         {
-                            gtin = product.Gtin,
-                            name = product.Name,
-                            quantity = orderQuantity
-                        });
+                            Gcp = item.Gcp,
+                            Name = item.CompanyName,
+                            Addr2 = item.CompanyAddr2,
+                            Addr3 = item.CompanyAddr3,
+                            Addr4 = item.CompanyAddr4,
+                            PostalCode = item.CompanyPostalCode,
+                            City = item.CompanyCity,
+                            Tel = item.CompanyTel,
+                            Mail = item.CompanyMail
+                        },
+                        OrderLines = new List<InboundOrderLine>()
+                    };
                 }
+
+                var orderQuantity = Math.Max(
+                    item.LowerThreshold * 3 - item.Held,
+                    item.MinimumOrderQuantity);
+
+                orderSegmentsByGcp[item.Gcp].OrderLines.Add(
+                    new InboundOrderLine
+                    {
+                        gtin = item.Gtin,
+                        name = item.ProductName,
+                        quantity = orderQuantity
+                    });
             }
 
-            Log.Debug(String.Format("Constructed order lines: {0}", orderlinesByCompany));
+            Log.Debug(String.Format("Constructed order lines: {0}", orderSegmentsByGcp));
 
-            var orderSegments = orderlinesByCompany.Select(ol => new OrderSegment()
-            {
-                OrderLines = ol.Value,
-                Company = ol.Key
-            });
+            var orderSegments = orderSegmentsByGcp.Values;
 
             Log.Info("Constructed inbound order");
 

@@ -14,6 +14,7 @@ namespace ShipIt.Repositories
         int GetTrackedItemsCount();
         int GetStockHeldSum();
         IEnumerable<StockDataModel> GetStockByWarehouseId(int id);
+        IEnumerable<InboundOrderDataModel> GetInboundOrderDataByWarehouseId(int warehouseId);
         Dictionary<int, StockDataModel> GetStockByWarehouseAndProductIds(int warehouseId, List<int> productIds);
         void RemoveStock(int warehouseId, List<StockAlteration> lineItems);
         void AddStock(int warehouseId, List<StockAlteration> lineItems);
@@ -46,6 +47,48 @@ namespace ShipIt.Repositories
             catch (NoSuchEntityException)
             {
                 return new List<StockDataModel>();
+            }
+        }
+
+        public IEnumerable<InboundOrderDataModel> GetInboundOrderDataByWarehouseId(int warehouseId)
+        {
+            string sql = @"
+                SELECT
+                    s.hld,
+                    p.gtin_cd,
+                    p.gtin_nm,
+                    p.l_th,
+                    p.min_qt,
+                    c.gcp_cd,
+                    c.gln_nm,
+                    c.gln_addr_02,
+                    c.gln_addr_03,
+                    c.gln_addr_04,
+                    c.gln_addr_postalcode,
+                    c.gln_addr_city,
+                    c.contact_tel,
+                    c.contact_mail
+                FROM stock s
+                INNER JOIN gtin p ON p.p_id = s.p_id
+                INNER JOIN gcp c ON c.gcp_cd = p.gcp_cd
+                WHERE s.w_id = @w_id
+                  AND s.hld < p.l_th
+                  AND p.ds = 0";
+
+            var parameter = new NpgsqlParameter("@w_id", warehouseId);
+
+            try
+            {
+                return RunGetQuery(
+                    sql,
+                    reader => new InboundOrderDataModel(reader),
+                    $"No inbound order data found for warehouse: {warehouseId}",
+                    parameter)
+                    .ToList();
+            }
+            catch (NoSuchEntityException)
+            {
+                return new List<InboundOrderDataModel>();
             }
         }
 

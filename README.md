@@ -1,25 +1,51 @@
-# ShipIt Inventory Management
+# ShipIt
 
-## Setup Instructions
-Open the project in VSCode.
-VSCode should automatically set up and install everything you'll need apart from the database connection!
+ASP.NET Core 8 warehouse inventory API for employees, companies, products, stock, and inbound/outbound orders.
 
-### Setting up the Database.
-Create 2 new postgres databases - one for the main program and one for our test database.
-Ask a team member for a dump of the production databases to create and populate your tables.
+## Prerequisites
 
-Then for each of the projects, add a `.env` file at the root of the project.
-That file should contain a property named `POSTGRES_CONNECTION_STRING`.
-It should look something like this:
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- PostgreSQL
+
+## Database
+
+Create two Postgres databases (one for the app, one for tests). Ask a teammate for a dump and restore it into both.
+
+Then apply migrations, including `Database/Migrations/001_add_employee_id.sql`:
+
+```bash
+psql -d your_database_name -f Database/Migrations/001_add_employee_id.sql
 ```
-POSTGRES_CONNECTION_STRING=Server=127.0.0.1;Port=5432;Database=your_database_name;User Id=your_database_user; Password=your_database_password;
+
+Add a `.env` file in both `ShipIt/` and `ShipItTest/`:
+
+```
+POSTGRES_CONNECTION_STRING=Server=127.0.0.1;Port=5432;Database=your_database_name;User Id=your_user;Password=your_password;
 ```
 
-## Running The API
-Once set up, simply run dotnet run in the ShipIt directory.
+## Run
 
-## Running The Tests
-To run the tests you should be able to run dotnet test in the ShipItTests directory.
+```bash
+cd ShipIt
+dotnet run
+```
 
-## Deploying to Production
-TODO
+The API listens on `http://localhost:5000` and `https://localhost:5001`. Check it with `GET /status`.
+
+## Test
+
+```bash
+cd ShipItTest
+dotnet test
+```
+
+Point `ShipItTest/.env` at the test database. Tests truncate tables before each run.
+
+## Endpoints
+
+- `GET /status` — warehouse counts
+- `GET/POST/DELETE /employees` — look up by name, warehouse, or `GET /employees/by-id/{id}`
+- `GET/POST /companies`
+- `GET/POST /products`
+- `GET/POST /orders/inbound`
+- `POST /orders/outbound` — returns truck loading
